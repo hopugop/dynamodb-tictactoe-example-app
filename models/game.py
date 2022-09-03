@@ -22,13 +22,17 @@ class Game:
     The other attributes are used to maintain game state.
     """
     def __init__(self, item):
-        self.item = item
-        self.gameId       = item["GameId"]
-        self.hostId       = item["HostId"]
-        self.opponent     = item["OpponentId"]
-        self.statusDate   = item["StatusDate"].split("_")
-        self.o            = item["OUser"]
-        self.turn         = item["Turn"]
+        if "Item" in item.keys():
+            item2=item["Item"]
+        else:
+            item2 = item
+        self.item = item2
+        self.gameId       = item2["GameId"]
+        self.hostId       = item2["HostId"]
+        self.opponent     = item2["OpponentId"]
+        self.statusDate   = item2["StatusDate"].split("_")
+        self.o            = item2["OUser"]
+        self.turn         = item2["Turn"]
 
     def getStatus(self):
         status = self.statusDate[0]
@@ -57,6 +61,8 @@ class Game:
             return self.hostId
 
     def getResult(self, current_player):
+        if "Result" not in self.item.keys():
+            return None
         if self.item["Result"] == None:
             return None
         if self.item["Result"] == "Tie":
