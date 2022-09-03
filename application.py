@@ -287,7 +287,7 @@ def accept(invite):
     Updates the game status to IN_PROGRESS and proceeds to the game's page.
     """
     gameId = request.form["response"]
-    game = controller.getGame(gameId)
+    game = controller.getGame(gameId)["Item"]
 
     if game == None:
         flash("That game does not exist anymore.")
@@ -308,7 +308,7 @@ def reject(invite):
     Deletes the item associated with the invite from the Games table.
     """
     gameId = request.form["response"]
-    game = controller.getGame(gameId)
+    game = controller.getGame(gameId)["Item"]
 
     if game == None:
         flash("That game doesn't exist anymore.")
