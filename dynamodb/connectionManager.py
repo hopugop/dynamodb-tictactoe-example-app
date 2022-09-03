@@ -37,13 +37,19 @@ class ConnectionManager:
 
     def setupGamesTable(self):
         try:
-            self.gamesTable = Table("Games", connection=self.db)
-        except Exception as e:
-            raise e("There was an issue trying to retrieve the Games table.")
+            self.gamesTable = self.db.Table("Games")
+            status = self.gamesTable.table_status
+        except:
+            createGamesTable(self.db)
+            raise Exception("There was an issue trying to retrieve the Games table.")
 
     def getGamesTable(self):
-        if self.gamesTable == None:
-            self.setupGamesTable()
+        try:
+            if self.gamesTable == None:
+                self.setupGamesTable()
+        except botocore.errorfactory.ResourceNotFoundException as e:
+            createGamesTable(self.db)
+            raise e
         return self.gamesTable
 
     def createGamesTable(self):
