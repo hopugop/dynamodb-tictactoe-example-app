@@ -233,6 +233,8 @@ def game(gameId):
             turn += " (O)"
         else:
             turn += " (X)"
+    else:
+        result = game.getResult(session["username"])
 
     gameData = {'gameId': gameId, 'status': game.status, 'turn': game.turn, 'board': boardState};
     gameJson = json.dumps(gameData)
