@@ -11,13 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from boto.exception         import JSONResponseError
-from boto.dynamodb2.fields  import KeysOnlyIndex
-from boto.dynamodb2.fields  import GlobalAllIndex
-from boto.dynamodb2.fields  import HashKey
-from boto.dynamodb2.fields  import RangeKey
-from boto.dynamodb2.layer1  import DynamoDBConnection
-from boto.dynamodb2.table   import Table
+import boto3, logging
 
 try:
     from urllib.request import urlopen
@@ -25,17 +19,33 @@ except ImportError:
     from urllib2 import urlopen
 import json
 
+import boto3_alternator
+
 def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, use_instance_metadata=False):
+    # Explode endpoint into a list if a comma-separated value was provided
+    # Otherwise just build a list with the single endpoint in it
+    if ',' in endpoint:
+        endpoint = endpoint.split(',')
+    else:
+        endpoint = [endpoint]
+    # Set up load balancing for Alternator
+    endpoint = boto3_alternator.setup1(
+    # A list of known Alternator nodes. One of them must be responsive.
+    endpoint,
+    # Alternator scheme (http or https) and port
+    'http', 8000,
+    # A "fake" domain name which, if used by the application, will be
+    # resolved to one of the Scylla nodes.
+    'tic-tac-toe.scylla.example')
+
     if local:
-        db = DynamoDBConnection(
-            host=endpoint,
-            port=port,
+        db = boto3.resource('dynamodb',
+            endpoint_url=endpoint,
             aws_secret_access_key='ticTacToeSampleApp',
-            aws_access_key_id='ticTacToeSampleApp',
-            is_secure=False)
+            aws_access_key_id='ticTacToeSampleApp')
     else:
         params = {
-            'is_secure': True
+            
             }
 
         # Read from config file, if provided
@@ -63,40 +73,86 @@ def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, us
             if 'region' in params:
                 del params['region']
 
-        db = DynamoDBConnection(**params)
+        db = boto3.resource('dynamodb', **params)
     return db
 
 def createGamesTable(db):
-
     try:
-        hostStatusDate = GlobalAllIndex("HostId-StatusDate-index",
-                                        parts=[HashKey("HostId"), RangeKey("StatusDate")],
-                                        throughput={
-                                            'read': 1,
-                                            'write': 1
-                                        })
-        opponentStatusDate  = GlobalAllIndex("OpponentId-StatusDate-index",
-                                        parts=[HashKey("OpponentId"), RangeKey("StatusDate")],
-                                        throughput={
-                                            'read': 1,
-                                            'write': 1
-                                        })
-
-        #global secondary indexes
-        GSI = [hostStatusDate, opponentStatusDate]
-
-        gamesTable = Table.create("Games",
-                    schema=[HashKey("GameId")],
-                    throughput={
-                        'read': 1,
-                        'write': 1
+        gamesTable = db.create_table(TableName="Games",
+                    KeySchema=[{'AttributeName': "GameId",
+                                'KeyType': 'HASH'}],
+                    AttributeDefinitions=[
+                    {
+                        'AttributeName': 'GameId',
+                        'AttributeType': 'S'
                     },
-                    global_indexes=GSI,
-                    connection=db)
-
-    except JSONResponseError as jre:
+                    {
+                        'AttributeName': 'HostId',
+                        'AttributeType': 'S'
+                    },
+                    {
+                        'AttributeName': 'StatusDate',
+                        'AttributeType': 'S'
+                    },
+                    {
+                        'AttributeName': 'OpponentId',
+                        'AttributeType': 'S'
+                    },
+                    ],
+                    ProvisionedThroughput={
+                        'ReadCapacityUnits': 1,
+                        'WriteCapacityUnits': 1
+                    },
+                    GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'HostId-StatusDate-index',
+                        'KeySchema': [
+                            {
+                                'AttributeName': 'HostId',
+                                'KeyType': 'HASH'
+                            },
+                            {
+                                'AttributeName': 'StatusDate',
+                                'KeyType': 'RANGE'
+                            },
+                        ],
+                        'Projection': {'ProjectionType': 'ALL',
+                                       'NonKeyAttributes': [
+                                            'string',
+                        ]},
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 123,
+                            'WriteCapacityUnits': 123
+                        }
+                    },
+                    {
+                        'IndexName': 'OpponentId-StatusDate-index',
+                        'KeySchema': [
+                            {
+                                'AttributeName': 'OpponentId',
+                                'KeyType': 'HASH'
+                            },
+                            {
+                                'AttributeName': 'StatusDate',
+                                'KeyType': 'RANGE'
+                            }
+                        ],
+                        'Projection': {'ProjectionType': 'ALL',
+                                       'NonKeyAttributes': [
+                                            'string',
+                        ]},
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 123,
+                            'WriteCapacityUnits': 123
+                        }
+                        }
+                    ]
+                )
+    except Exception as e:
+        print('Create failed.')
+        print(e)
         try:
-            gamesTable = Table("Games", connection=db)
+            gamesTable = db.Table("Games")
         except Exception as e:
             print("Games Table doesn't exist.")
     finally:
