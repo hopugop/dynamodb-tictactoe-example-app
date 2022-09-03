@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .setupDynamoDB          import getDynamoDBConnection, createGamesTable
-from boto.dynamodb2.table   import Table
 from uuid                   import uuid4
 
 class ConnectionManager:

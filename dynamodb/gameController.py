@@ -11,12 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from boto.exception         import JSONResponseError
-from boto.dynamodb2.exceptions import ConditionalCheckFailedException
-from boto.dynamodb2.exceptions import ItemNotFound
-from boto.dynamodb2.exceptions import ValidationException
-from boto.dynamodb2.items   import Item
-from boto.dynamodb2.table   import Table
 from datetime               import datetime
 
 class GameController:
