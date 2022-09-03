@@ -34,21 +34,18 @@ class GameController:
 
         now = str(datetime.now())
         statusDate = "PENDING_" + now
-        item = Item(self.cm.getGamesTable(), data= {
+        return self.cm.getGamesTable().put_item(TableName='Games',
+                            Item={
                             "GameId"     : gameId,
                             "HostId"     : creator,
                             "StatusDate" : statusDate,
                             "OUser"      : creator,
                             "Turn"       : invitee,
-                            "OpponentId" : invitee
-                        })
-
-        return item.save()
+                            "OpponentId" : invitee})
 
     def checkIfTableIsActive(self):
-        description = self.cm.db.describe_table("Games")
-        status = description['Table']['TableStatus']
-
+        status = self.cm.getGamesTable().table_status
+        
         return status == "ACTIVE"
 
     def getGame(self, gameId):
@@ -58,10 +55,10 @@ class GameController:
         Returns None on an ItemNotFound Exception.
         """
         try:
-            item = self.cm.getGamesTable().get_item(GameId=gameId)
-        except ItemNotFound as inf:
+            item = self.cm.getGamesTable().get_item(Key={'GameId': gameId})
+        except Exception as inf:
             return None
-        except JSONResponseError as jre:
+        except Exception as jre:
             return None
 
         return item
@@ -71,26 +68,27 @@ class GameController:
         status = "IN_PROGRESS_"
         statusDate = status + date
         key = {
-                "GameId" : { "S" : game["GameId"] }
+                "GameId" : game["GameId"]
             }
 
         attributeUpdates = {
                         "StatusDate" : {
                             "Action" : "PUT",
-                            "Value"  : { "S" : statusDate }
+                            "Value"  : statusDate
                             }
                         }
 
         expectations = {"StatusDate" : {
-                            "AttributeValueList": [{"S" : "PENDING_"}],
+                            "AttributeValueList": ["PENDING_"],
                             "ComparisonOperator": "BEGINS_WITH"}
                     }
 
         try:
-            self.cm.db.update_item("Games", key=key,
-                        attribute_updates=attributeUpdates,
-                        expected=expectations)
-        except ConditionalCheckFailedException as ccfe:
+            self.cm.getGamesTable().update_item(Key=key,
+                        AttributeUpdates=attributeUpdates,
+                        Expected=expectations)
+        except Exception as e:
+            print(e)
             return False
 
         return True
@@ -103,16 +101,17 @@ class GameController:
         """
 
         key = {
-                "GameId": { "S" : game["GameId"] }
+                "GameId": game["GameId"]
             }
         expectation = {"StatusDate" : {
-                            "AttributeValueList": [{"S" : "PENDING_"}],
+                            "AttributeValueList": ["PENDING_"],
                             "ComparisonOperator": "BEGINS_WITH" }
                     }
 
         try:
-            self.cm.db.delete_item("Games", key, expected=expectation)
+            self.cm.getGamesTable().delete_item(Key=key, Expected=expectation)
         except Exception as e:
+            print(e)
             return False
 
         return True
@@ -127,26 +126,13 @@ class GameController:
         if user == None:
             return invites
 
-        gameInvitesIndex = self.cm.getGamesTable().query(OpponentId__eq=user,
-                                            StatusDate__beginswith="PENDING_",
-                                            index="OpponentId-StatusDate-index",
-                                            limit=10)
+        gameInvitesIndex = self.cm.getGamesTable().query(IndexName='OpponentId-StatusDate-index', KeyConditionExpression=(Key('OpponentId').eq(user) & Key('StatusDate').begins_with('PENDING_')))
 
 
-        for i in range(10):
-            try:
-                gameInvite = next(gameInvitesIndex)
-            except StopIteration as si:
-                break
-            except ValidationException as ve:
-                break
-            except JSONResponseError as jre:
-                if jre.body.get(u'__type', None) == self.ResourceNotFound:
-                    return None
-                else:
-                    raise jre
-
-            invites.append(gameInvite)
+        if len(gameInvitesIndex['Items']) == 0: return None
+        for item in gameInvitesIndex['Items']:
+            if len(invites) > 10: break
+            invites.append(item)
 
         return invites
 
@@ -162,6 +148,7 @@ class GameController:
         If this succeeds we update the Turn to the next player, as well.
         Returns True/False depending on the success of the these operations.
         """
+        item = item["Item"]
         player_one = item["HostId"]
         player_two = item["OpponentId"]
         gameId     = item["GameId"]
@@ -178,32 +165,31 @@ class GameController:
             next_player = player_one
 
         key = {
-                "GameId" : { "S" : gameId }
+                "GameId" : gameId
             }
 
         attributeUpdates = {
                         position : {
                             "Action" : "PUT",
-                            "Value"  : { "S" : representation }
+                            "Value"  : representation
                             },
                         "Turn" : {
                             "Action" : "PUT",
-                            "Value" : { "S" : next_player }
+                            "Value" : next_player
                             }
                         }
 
 
-        expectations = {"StatusDate" : {"AttributeValueList": [{"S" : "IN_PROGRESS_"}],
+        expectations = {"StatusDate" : {"AttributeValueList": ["IN_PROGRESS_"],
                                         "ComparisonOperator": "BEGINS_WITH"},
-                        "Turn"       : {"Value" : {"S" : current_player}},
+                        "Turn"       : {"Value" : current_player},
                         position     : {"Exists" : False}}
 
         # LOW LEVEL API
         try:
-            self.cm.db.update_item("Games", key=key,
-                        attribute_updates=attributeUpdates,
-                        expected=expectations)
-        except ConditionalCheckFailedException as ccfe:
+            self.cm.getGamesTable().update_item(Key=key, AttributeUpdates=attributeUpdates, Expected=expectations)
+        except Exception as e:
+            print(e)
             return False
 
         return True
@@ -217,8 +203,12 @@ class GameController:
         squares = ["TopLeft", "TopMiddle", "TopRight", "MiddleLeft", "MiddleMiddle", "MiddleRight", \
                     "BottomLeft", "BottomMiddle", "BottomRight"]
         state = []
+        item = item['Item']
         for square in squares:
-            value = item[square]
+            if square in item.keys():
+                value = item[square]
+            else:
+                value = None
             if value == None:
                 state.append(" ")
             else:
@@ -233,7 +223,7 @@ class GameController:
         """
         yourMarker = "X"
         theirMarker = "O"
-        if current_player == item["OUser"]:
+        if current_player == item["Item"]["OUser"]:
             yourMarker = "O"
             theirMakrer = "X"
 
@@ -277,9 +267,11 @@ class GameController:
         with the name of the winning player.
         Returns True/False depending on the success of the operation.
         """
-
+        if "Item" in item.keys():
+            item = item["Item"]
+        print(f'changeGameToFinishedState: item=[{item}], result=[{result}]')
         #Happens if you're visiting a game that already has a winner
-        if item["Result"] != None:
+        if "Result" in item.keys() and item["Result"] != None:
             return True
 
         date = str(datetime.now())
@@ -296,8 +288,29 @@ class GameController:
                 item["Result"] = item["OpponentId"]
             else:
                 item["Result"] = item["HostId"]
+        
+        attributeUpdates = {
+                        "StatusDate" : {
+                            "Action" : "PUT",
+                            "Value"  : item["StatusDate"]
+                            },
+                        "Turn" : {
+                            "Action" : "PUT",
+                            "Value" : item["Turn"]
+                            },
+                        "Result" : {
+                            "Action" : "PUT",
+                            "Value" : item["Result"]
+                            }
+                        }
 
-        return item.save()
+        try:
+            s = self.cm.getGamesTable().update_item(Key={'GameId': item['GameId']},
+            AttributeUpdates=attributeUpdates)
+        except Exception as e:
+            print(e)
+            return False
+        return s
 
     def mergeQueries(self, host, opp, limit=10):
         """
@@ -308,6 +321,8 @@ class GameController:
         games = []
         game_one = None
         game_two = None
+        if len(host) == 0 and len(opp) == 0: return games
+        return host + opp
         while len(games) <= limit:
             if game_one == None:
                 try:
@@ -356,16 +371,10 @@ class GameController:
         if user == None:
             return []
 
-        hostGamesInProgress = self.cm.getGamesTable().query(HostId__eq=user,
-                                            StatusDate__beginswith=status,
-                                            index="HostId-StatusDate-index",
-                                            limit=10)
+        hostGamesInProgress = self.cm.getGamesTable().query(IndexName='HostId-StatusDate-index', KeyConditionExpression=(Key('HostId').eq(user) & Key('StatusDate').begins_with(status)))    
+        
+        oppGamesInProgress = self.cm.getGamesTable().query(IndexName='OpponentId-StatusDate-index', KeyConditionExpression=(Key('OpponentId').eq(user) & Key('StatusDate').begins_with(status)))    
 
-        oppGamesInProgress = self.cm.getGamesTable().query(OpponentId__eq=user,
-                                            StatusDate__beginswith=status,
-                                            index="OpponentId-StatusDate-index",
-                                            limit=10)
-
-        games = self.mergeQueries(hostGamesInProgress,
-                                oppGamesInProgress)
+        games = self.mergeQueries(hostGamesInProgress['Items'],
+                                oppGamesInProgress['Items'])
         return games
