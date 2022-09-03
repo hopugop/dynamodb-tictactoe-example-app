@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from datetime               import datetime
+from boto3.dynamodb.conditions import Key
 
 class GameController:
     """
