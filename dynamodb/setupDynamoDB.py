@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import boto3, logging
+import boto3, logging, time
 
 try:
     from urllib.request import urlopen
@@ -29,7 +29,7 @@ def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, us
     else:
         endpoint = [endpoint]
     # Set up load balancing for Alternator
-    endpoint = boto3_alternator.setup1(
+    endpoint = boto3_alternator.setup2(
     # A list of known Alternator nodes. One of them must be responsive.
     endpoint,
     # Alternator scheme (http or https) and port
@@ -149,6 +149,7 @@ def createGamesTable(db):
                         }
                     ]
                 )
+        time.sleep(5)
     except Exception as e:
         print('Create failed.')
         print(e)
