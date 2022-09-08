@@ -42,7 +42,8 @@ def getDynamoDBConnection(config=None, endpoint=None, port=None, local=False, us
         db = boto3.resource('dynamodb',
             endpoint_url=endpoint,
             aws_secret_access_key='ticTacToeSampleApp',
-            aws_access_key_id='ticTacToeSampleApp')
+            aws_access_key_id='ticTacToeSampleApp',
+            region_name="local")
     else:
         params = {
             
