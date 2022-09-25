@@ -9,16 +9,15 @@ These instructions will also require you to have access to a terminal.
 
 ## Installing Python
 
-Download Python (use v3.6+) by following the instructions on https://www.python.org/download/
+If you don't have Python installed by default, download Python (use v3.6+) by following the instructions on https://www.python.org/download/
 
-## Installing Flask and Boto3 (Choose one of the two options):
+## Installing required dependencies:
     
 Download/install pip *(Follow the instructions here http://pip.readthedocs.org/en/latest/installing.html)*
 
-   Once you have pip up to date and installed, run these commands.
+   Once you have pip up to date and installed, clone this repo, cd to its dir and run:.
 
-        pip3 install Flask
-        pip3 install boto3
+        pip3 install -r /path/to/requirements.txt
 
 ## Configuring Tic Tac Toe
 Once you have these dependencies set up, you will have to run the application with your own configurations.
@@ -31,3 +30,12 @@ The full list of options is as follows:
 Example:
 
       python3 application.py --mode local --endpoint $yourAlternatorIP
+
+## Run Alternator
+
+You can easily get an Alternator instance started by running the following:
+
+      docker run --name scylladb-alternator scylladb/scylla:latest --smp 1 --memory 512M --alternator-port 8000 --alternator-write-isolation always
+      sleep 1m
+      yourAlternatorIP="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' scylladb-alternator)"
+      # then you can run the application.py passing variable $yourAlternatorIP
